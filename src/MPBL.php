@@ -6,6 +6,7 @@ class MPBL {
 	private int $pd = 3;
 	private string $datapath;
 	private string $srcdir;
+	private string $format = 'png';
 	private array $tdl;
 	private array $cache_src = [];
 	private array $cache_grid = [];
@@ -73,12 +74,12 @@ class MPBL {
 		$img->setImageProperty('nep:height', strval($td['height']));
 		return $img;
 	}
-	private function gen_textures(): Generator {
+	private function gen_sprites(): Generator {
 		foreach ($this->tdl as $td)
 			yield $td['name'] => $this->canonical_image($td);
 	}
-	private function get_blob(Imagick $img, string $format = 'png'): string {
-		$img->setImageFormat($format); // throws ImagickException
+	private function get_blob(Imagick $img): string {
+		$img->setImageFormat($this->format); // throws ImagickException
 		return $img->getImagesBlob();
 	}
 	public function data_byname(string $name): array {
@@ -100,24 +101,30 @@ class MPBL {
 		$this->srcdir = $srcdir ?? dirname($this->datapath);
 		return is_dir($this->srcdir);
 	}
-	public function print_and_exit(string $name, string $format = 'png', ?string $mime = null): void /* 'never' for 8.1+ */ {
+	public function set_format(string $format = 'png'): bool {
+		if (!Imagick::queryFormats(strtoupper($format)))
+			return false;
+		$this->format = strtolower($format);
+		return true;
+	}
+	public function print_and_exit(string $name, ?string $mime = null): void /* 'never' for 8.1+ */ {
 		headers_sent() && throw new Exception("Headers already sent");
 		$img = $this->img_byname($name);
-		$blob = $this->get_blob($img, $format);
-		$mime ??= "image/$format";
+		$blob = $this->get_blob($img);
+		$mime ??= "image/{$this->format}";
 		header("Content-Type: $mime");
-		header("Content-Disposition: inline; filename=$name.$format");
+		header("Content-Disposition: inline; filename=$name.{$this->format}");
 		header("Content-Length: {$img->getImageLength()}");
 		header("X-Nep-Width: {$img->getImageProperty('nep:width')}");
 		header("X-Nep-Height: {$img->getImageProperty('nep:height')}");
 		exit($blob);
 	}
-	public function get_textures(): array {
-		return iterator_to_array($this->gen_textures());
+	public function get_sprites(): array {
+		return iterator_to_array($this->gen_sprites());
 	}
 	function __invoke(string $outdir): bool {
 		is_dir($outdir) && is_writable($outdir) || throw new Exception("Bad output directory [$outdir]");
-		foreach ($this->gen_textures() as $name => $img)
+		foreach ($this->gen_sprites() as $name => $img)
 			$this->write_img($img, $outdir.'/'.$name.'.png');
 		return true;
 	}
