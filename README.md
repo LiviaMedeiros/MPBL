@@ -1,0 +1,1 @@
+Sprite viewer for discontinued 「メガミラクルフォース」.
