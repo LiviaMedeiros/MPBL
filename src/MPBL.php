@@ -24,10 +24,8 @@ class MPBL {
 		foreach ($this->cache_src as $src)
 			$src->clear();
 	}
-	private function extract_cell(string $path, Imagick $src, int $x, int $y): Imagick {
-		$tmp = clone $src;
-		$tmp->cropImage($this->rs, $this->rs, $x + $this->pd, $y + $this->pd);
-		return $tmp;
+	private function extract_cell(Imagick $src, int $x, int $y): Imagick {
+		return $src->getImageRegion($this->rs, $this->rs, $x + $this->pd, $y + $this->pd);
 	}
 	private function generate_grid(string $srcpath, array $res = []): array {
 		if (isset($this->cache_grid[$srcpath]))
@@ -37,7 +35,7 @@ class MPBL {
 		$y = $src->getImageHeight();
 		while (($y -= $this->cs) >= 0)
 			for ($x = 0; $x < $src_width; $x += $this->cs)
-				$res[] = $this->extract_cell($srcpath, $src, $x, $y);
+				$res[] = $this->extract_cell($src, $x, $y);
 		return $this->cache_grid[$srcpath] = $res;
 	}
 	private function build_rows(array $td, array $grid, array $res = []): array {
@@ -79,7 +77,7 @@ class MPBL {
 		foreach ($this->tdl as $td)
 			yield $td['name'] => $this->canonical_image($td);
 	}
-	private function get_file(Imagick $img, string $format = 'png'): string {
+	private function get_blob(Imagick $img, string $format = 'png'): string {
 		$img->setImageFormat($format); // throws ImagickException
 		return $img->getImagesBlob();
 	}
@@ -90,9 +88,6 @@ class MPBL {
 	}
 	private function img_byname(string $name): Imagick {
 		return $this->canonical_image($this->data_byname($name));
-	}
-	private function print_raw(Imagick $img, string $format = 'png'): bool {
-		return print($this->get_file($img, $format));
 	}
 	private function write_img(Imagick $img, string $filepath, bool $keep = false): bool {
 		$img->setImagePage(0, 0, 0, 0);
@@ -108,12 +103,14 @@ class MPBL {
 	public function print_and_exit(string $name, string $format = 'png', ?string $mime = null): void /* 'never' for 8.1+ */ {
 		headers_sent() && throw new Exception("Headers already sent");
 		$img = $this->img_byname($name);
+		$blob = $this->get_blob($img, $format);
 		$mime ??= "image/$format";
 		header("Content-Type: $mime");
-		header("Content-disposition: inline; filename=$name.$format");
+		header("Content-Disposition: inline; filename=$name.$format");
+		header("Content-Length: {$img->getImageLength()}");
 		header("X-Nep-Width: {$img->getImageProperty('nep:width')}");
 		header("X-Nep-Height: {$img->getImageProperty('nep:height')}");
-		$this->print_raw($img, $format) && exit();
+		exit($blob);
 	}
 	public function get_textures(): array {
 		return iterator_to_array($this->gen_textures());
