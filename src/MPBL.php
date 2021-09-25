@@ -8,7 +8,6 @@ class MPBL {
 	private string $srcdir;
 	private array $tdl;
 	private array $cache_src = [];
-	private array $cache_cells = [];
 	private array $cache_grid = [];
 
 	function __construct(string $file, ?string $srcdir = null) {
@@ -24,17 +23,10 @@ class MPBL {
 	function __destruct() {
 		foreach ($this->cache_src as $src)
 			$src->clear();
-		foreach ($this->cache_cells as $cells)
-			if (is_array($cells))
-				foreach ($cells as $cell)
-					$cell->clear();
 	}
 	private function extract_cell(string $path, Imagick $src, int $x, int $y): Imagick {
-		if (isset($this->cache_cells[$path][$x.'x'.$y]))
-			return $this->cache_cells[$path][$x.'x'.$y];
 		$tmp = clone $src;
 		$tmp->cropImage($this->rs, $this->rs, $x + $this->pd, $y + $this->pd);
-		$this->cache_cells[$path][$x.'x'.$y] = $tmp;
 		return $tmp;
 	}
 	private function generate_grid(string $srcpath, array $res = []): array {
