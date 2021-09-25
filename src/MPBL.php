@@ -77,16 +77,16 @@ class MPBL {
 		$full->clear();
 		return $res;
 	}
-	private function canonical_image(array $td, ?string $srcdir = null): array {
+	private function canonical_image(array $td): array {
 		return [
 			'width' => $td['width'],
 			'height' => $td['height'],
-			'img' => $this->build_image($td, $this->generate_grid(($srcdir ?? $this->srcdir).'/'.$td['atlasName'].'.png'))
+			'img' => $this->build_image($td, $this->generate_grid($this->srcdir.'/'.$td['atlasName'].'.png'))
 		];
 	}
-	private function gen_textures(?string $srcdir = null): Generator {
+	private function gen_textures(): Generator {
 		foreach ($this->tdl as $td)
-			yield $td['name'] => $this->canonical_image($td, $srcdir)['img'];
+			yield $td['name'] => $this->canonical_image($td)['img'];
 	}
 	private function get_file(Imagick $img, string $format = 'png'): string {
 		$img->setImageFormat($format); // throws ImagickException
@@ -97,8 +97,8 @@ class MPBL {
 		$key === false && throw new Exception("Texture not found [$name]");
 		return $this->tdl[$key];
 	}
-	private function img_byname(string $name, ?string $srcdir = null): array {
-		return $this->canonical_image($this->data_byname($name), $srcdir);
+	private function img_byname(string $name): array {
+		return $this->canonical_image($this->data_byname($name));
 	}
 	private function print_raw(Imagick $img, string $format = 'png'): bool {
 		return print($this->get_file($img, $format));
@@ -124,12 +124,12 @@ class MPBL {
 		header("X-Nep-Height: {$imgdata['height']}");
 		$this->print_raw($imgdata['img'], $format) && exit();
 	}
-	public function get_textures(?string $srcdir = null): array {
-		return iterator_to_array($this->gen_textures($srcdir));
+	public function get_textures(): array {
+		return iterator_to_array($this->gen_textures());
 	}
-	function __invoke(string $outdir, ?string $srcdir = null): bool {
+	function __invoke(string $outdir): bool {
 		is_dir($outdir) && is_writable($outdir) || throw new Exception("Bad output directory [$outdir]");
-		foreach ($this->gen_textures($srcdir) as $name => $img)
+		foreach ($this->gen_textures() as $name => $img)
 			$this->write_img($img, $outdir.'/'.$name.'.png');
 		return true;
 	}
