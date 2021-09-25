@@ -69,16 +69,15 @@ class MPBL {
 		$full->clear();
 		return $res;
 	}
-	private function canonical_image(array $td): array {
-		return [
-			'width' => $td['width'],
-			'height' => $td['height'],
-			'img' => $this->build_image($td, $this->generate_grid($this->srcdir.'/'.$td['atlasName'].'.png'))
-		];
+	private function canonical_image(array $td): Imagick {
+		$img = $this->build_image($td, $this->generate_grid($this->srcdir.'/'.$td['atlasName'].'.png'));
+		$img->setImageProperty('nep:width', strval($td['width']));
+		$img->setImageProperty('nep:height', strval($td['height']));
+		return $img;
 	}
 	private function gen_textures(): Generator {
 		foreach ($this->tdl as $td)
-			yield $td['name'] => $this->canonical_image($td)['img'];
+			yield $td['name'] => $this->canonical_image($td);
 	}
 	private function get_file(Imagick $img, string $format = 'png'): string {
 		$img->setImageFormat($format); // throws ImagickException
@@ -89,7 +88,7 @@ class MPBL {
 		$key === false && throw new Exception("Texture not found [$name]");
 		return $this->tdl[$key];
 	}
-	private function img_byname(string $name): array {
+	private function img_byname(string $name): Imagick {
 		return $this->canonical_image($this->data_byname($name));
 	}
 	private function print_raw(Imagick $img, string $format = 'png'): bool {
@@ -97,7 +96,7 @@ class MPBL {
 	}
 	private function write_img(Imagick $img, string $filepath, bool $keep = false): bool {
 		$img->setImagePage(0, 0, 0, 0);
-		$img->stripImage();
+		//$img->stripImage(); // EXIF software is still a mess btw
 		$img->writeImage($filepath); // throws ImagickException
 		return $keep || $img->clear();
 	}
@@ -108,13 +107,13 @@ class MPBL {
 	}
 	public function print_and_exit(string $name, string $format = 'png', ?string $mime = null): void /* 'never' for 8.1+ */ {
 		headers_sent() && throw new Exception("Headers already sent");
-		$imgdata = $this->img_byname($name);
+		$img = $this->img_byname($name);
 		$mime ??= "image/$format";
 		header("Content-Type: $mime");
 		header("Content-disposition: inline; filename=$name.$format");
-		header("X-Nep-Width: {$imgdata['width']}");
-		header("X-Nep-Height: {$imgdata['height']}");
-		$this->print_raw($imgdata['img'], $format) && exit();
+		header("X-Nep-Width: {$img->getImageProperty('nep:width')}");
+		header("X-Nep-Height: {$img->getImageProperty('nep:height')}");
+		$this->print_raw($img, $format) && exit();
 	}
 	public function get_textures(): array {
 		return iterator_to_array($this->gen_textures());
