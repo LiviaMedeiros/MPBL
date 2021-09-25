@@ -46,7 +46,7 @@ class MPBL {
 			$cell == $td['transparentIndex']
 				? $row->newImage($this->rs, $this->rs, 'transparent')
 				: $row->addImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"));
-			if (($col += $this->rs) > $td['width']) {
+			if (($col += $this->rs) >= $td['width']) {
 				$row->resetIterator();
 				array_unshift($res, $row->appendImages(false)); // reverse order
 				$row->clear();
@@ -82,9 +82,9 @@ class MPBL {
 		$img->setImageFormat($this->format); // throws ImagickException
 		return $img->getImagesBlob();
 	}
-	public function data_byname(string $name): array {
+	private function data_byname(string $name): array {
 		$key = array_search($name, array_column($this->tdl, 'name'));
-		$key === false && throw new Exception("Texture not found [$name]");
+		$key === false && throw new Exception("Sprite not found [$name]");
 		return $this->tdl[$key];
 	}
 	private function img_byname(string $name): Imagick {
