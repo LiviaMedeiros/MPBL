@@ -26,7 +26,7 @@ class MPBL {
 			$src->clear();
 	}
 	private function extract_cell(Imagick $src, int $x, int $y): Imagick {
-		return $src->getImageRegion($this->rs, $this->rs, $x + $this->pd, $y + $this->pd);
+		return $src->getImageRegion($this->cs, $this->cs, $x, $y);
 	}
 	private function generate_grid(string $srcpath, array $res = []): array {
 		if (isset($this->cache_grid[$srcpath]))
@@ -39,43 +39,24 @@ class MPBL {
 				$res[] = $this->extract_cell($src, $x, $y);
 		return $this->cache_grid[$srcpath] = $res;
 	}
-	private function build_rows(array $td, array $grid, array $res = []): array {
-		$col = 0;
-		$row = new Imagick();
-		foreach ($td['cellIndexList'] as $cell) {
-			$cell == $td['transparentIndex']
-				? $row->newImage($this->rs, $this->rs, 'transparent')
-				: $row->addImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"));
-			if (($col += $this->rs) >= $td['width']) {
-				$row->resetIterator();
-				array_unshift($res, $row->appendImages(false)); // reverse order
-				$row->clear();
-				$row = new Imagick();
-				$col = 0;
-			}
-		}
-		$row->clear();
-		return $res;
-	}
 	private function build_image(array $td, array $grid): Imagick {
-		// this method, if provided with reversed rows, should produce the same result as Imagick::montageImage
-		// with tile_geometry like "{$this->cs}x{$this->cs}-{$this->pd}-{$this->pd}"
-		// however, there is a visible cell overlap in montageImage version
-		$full = new Imagick();
-		foreach ($this->build_rows($td, $grid) as $row) {
-			$full->addImage($row);
-			$row->clear();
-		}
-		$full->resetIterator();
-		$res = $full->appendImages(true);
-		$full->clear();
+		$res = new Imagick();
+		$width = intval(ceil($td['width'] / $this->rs) * $this->rs);
+		$height = intval(ceil($td['height'] / $this->rs) * $this->rs);
+		$res->newImage($width + 2 * $this->pd, $height + 2 * $this->pd, 'transparent');
+		$i = 0;
+		for ($y = $height - $this->rs; $y >= 0; $y -= $this->rs) // bottom to top
+			for ($x = 0; $x < $width; $x += $this->rs) // negative offsets would break colorspace inheritance
+				if ($td['transparentIndex'] != $cell = $td['cellIndexList'][$i++] ?? throw new Exception("Too few indexes [$i]"))
+					$res->compositeImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"), Imagick::COMPOSITE_COPY, $x, $y);
+		$res->cropImage($width, $height, $this->pd, $this->pd);
+		$res->setImagePage(0, 0, 0, 0); // safety measure
+		$res->setImageProperty('nep:width', strval($td['width']));
+		$res->setImageProperty('nep:height', strval($td['height']));
 		return $res;
 	}
 	private function canonical_image(array $td): Imagick {
-		$img = $this->build_image($td, $this->generate_grid($this->srcdir.'/'.$td['atlasName'].'.png'));
-		$img->setImageProperty('nep:width', strval($td['width']));
-		$img->setImageProperty('nep:height', strval($td['height']));
-		return $img;
+		return $this->build_image($td, $this->generate_grid($this->srcdir.'/'.$td['atlasName'].'.png'));
 	}
 	private function gen_sprites(): Generator {
 		foreach ($this->tdl as $td)
@@ -94,7 +75,6 @@ class MPBL {
 		return $this->canonical_image($this->data_byname($name));
 	}
 	private function write_img(Imagick $img, string $filepath, bool $keep = false): bool {
-		$img->setImagePage(0, 0, 0, 0);
 		//$img->stripImage(); // EXIF software is still a mess btw
 		$img->writeImage($filepath); // throws ImagickException
 		return $keep || $img->clear();

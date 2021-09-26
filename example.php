@@ -1,5 +1,5 @@
 <?php declare(strict_types = 1);
-require(__DIR__.'/src/MPBL.php');
+require(__DIR__.'/src/MPBL_mk2.php');
 
 $nep = new MPBL($argv[1] ?? '/megamira/texture/character/stand/1130700_stand.json'); // 憧れた紫色の輝き
 
