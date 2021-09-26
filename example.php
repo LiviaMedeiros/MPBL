@@ -12,6 +12,8 @@ if (!empty($_GET['name'])) {
 	);
 }
 
+echo $nep[count($nep) - 1]['transparentIndex'].PHP_EOL;
+
 $ret = $nep($argv[2] ?? '/tmp/MPBL'); // directory must exist
 
 exit($ret ? 0 : 1);

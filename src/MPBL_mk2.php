@@ -1,6 +1,6 @@
 <?php declare(strict_types = 1);
 
-class MPBL {
+class MPBL implements ArrayAccess, Countable {
 	private int $cs = 64;
 	private int $rs = 58;
 	private int $pd = 3;
@@ -77,8 +77,11 @@ class MPBL {
 		$img->setImageFormat($this->format); // throws ImagickException
 		return $img->getImagesBlob();
 	}
+	private function name2key(string $name): bool|int {
+		return array_search($name, array_column($this->tdl, 'name'));
+	}
 	private function data_byname(string $name): array {
-		$key = array_search($name, array_column($this->tdl, 'name'));
+		$key = $this->name2key($name);
 		$key === false && throw new Exception("Sprite not found [$name]");
 		return $this->tdl[$key];
 	}
@@ -91,6 +94,34 @@ class MPBL {
 		return $keep || $img->clear();
 	}
 
+	// ArrayAccess
+	public function offsetExists(mixed $offset): bool {
+		return match(gettype($offset)) {
+			'integer' => isset($this->tdl[$offset]),
+			'string' => $this->name2key($offset) !== false,
+			default => false
+		};
+	}
+	public function offsetGet(mixed $offset): mixed {
+		return match(gettype($offset)) { // promiscuity is intended
+			'integer' => $this->tdl[$offset] ?? throw new OutOfBoundsException("Bad offset [$offset]"), // array
+			'string' => $this->img_byname($offset), // Imagick
+			default => throw new TypeError("Bad offset [$offset]")
+		};
+	}
+	public function offsetSet(mixed $offset, mixed $value): void { // I wonder if 'never' will work here lol
+		throw new Exception("Nep [$offset=$value]");
+	}
+	public function offsetUnset(mixed $offset): void {
+		throw new Exception("Nep [$offset]");
+	}
+
+	// Countable
+	public function count(): int {
+		return count($this->tdl);
+	}
+
+	// MPBL
 	public function set_dir(?string $srcdir = null): bool {
 		$this->srcdir = $srcdir ?? dirname($this->datapath);
 		return is_dir($this->srcdir);
