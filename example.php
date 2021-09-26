@@ -5,6 +5,7 @@ $nep = new MPBL($argv[1] ?? '/megamira/texture/character/stand/1130700_stand.jso
 
 if (!empty($_GET['name'])) {
 	$nep->set_format('webp');
+	$nep->set_crop('none');
 	$nep->print_and_exit($_GET['name']);
 }
 

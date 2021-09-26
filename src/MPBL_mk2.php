@@ -7,6 +7,7 @@ class MPBL {
 	private string $datapath;
 	private string $srcdir;
 	private string $format = 'png';
+	private string $crop = 'default';
 	private array $tdl;
 	private array $cache_src = [];
 	private array $cache_grid = [];
@@ -49,10 +50,16 @@ class MPBL {
 			for ($x = 0; $x < $width; $x += $this->rs) // negative offsets would break colorspace inheritance
 				if ($td['transparentIndex'] != $cell = $td['cellIndexList'][$i++] ?? throw new Exception("Too few indexes [$i]"))
 					$res->compositeImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"), Imagick::COMPOSITE_COPY, $x, $y);
-		$res->cropImage($width, $height, $this->pd, $this->pd);
+		match($this->crop) {
+			'none' => true,
+			'full' => $res->cropImage($td['width'], $td['height'], 0, $height - $td['height'] + $this->pd),
+			default => $res->cropImage($width, $height, $this->pd, $this->pd)
+		} || throw new Exception("Crop failed [{$this->crop}]");
 		$res->setImagePage(0, 0, 0, 0); // safety measure
+
 		$res->setImageProperty('nep:width', strval($td['width']));
 		$res->setImageProperty('nep:height', strval($td['height']));
+		$res->setImageProperty('nep:crop', $this->crop);
 		return $res;
 	}
 	private function canonical_image(array $td): Imagick {
@@ -90,6 +97,10 @@ class MPBL {
 		$this->format = strtolower($format);
 		return true;
 	}
+	public function set_crop(string $crop = 'default'): bool {
+		$this->crop = $crop; // should be implemented as enum
+		return true;
+	}
 	public function print_and_exit(string $name, ?string $mime = null): void /* 'never' for 8.1+ */ {
 		headers_sent() && throw new Exception("Headers already sent");
 		$img = $this->img_byname($name);
@@ -100,6 +111,7 @@ class MPBL {
 		header("Content-Length: {$img->getImageLength()}");
 		header("X-Nep-Width: {$img->getImageProperty('nep:width')}");
 		header("X-Nep-Height: {$img->getImageProperty('nep:height')}");
+		header("X-Nep-Crop: {$img->getImageProperty('nep:crop')}");
 		exit($blob);
 	}
 	public function get_sprites(): array {
