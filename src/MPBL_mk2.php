@@ -18,7 +18,11 @@ class MPBL {
 			'cellSize' => $this->cs,
 			'padding' => $this->pd,
 			'textureDataList' => $this->tdl,
-		] = json_decode(file_get_contents($this->datapath), true)) || throw new Exception("Bad file [$file]");
+		] = json_decode( // throws JsonException
+			json: file_get_contents($this->datapath),
+			associative: true,
+			flags: JSON_THROW_ON_ERROR
+		)) || throw new Exception("Bad file [$file]");
 		$this->rs = $this->cs - 2 * $this->pd;
 		$this->set_dir($srcdir);
 	}
@@ -101,17 +105,20 @@ class MPBL {
 		$this->crop = $crop; // should be implemented as enum
 		return true;
 	}
-	public function print_and_exit(string $name, ?string $mime = null): void /* 'never' for 8.1+ */ {
-		headers_sent() && throw new Exception("Headers already sent");
+	public function print_and_exit(string $name, ?string $mime = null, ?callable $mutator = null): void /* 'never' for 8.1+ */ {
 		$img = $this->img_byname($name);
+		$img = $mutator === null ?: $mutator($img);
 		$blob = $this->get_blob($img);
 		$mime ??= "image/{$this->format}";
-		header("Content-Type: $mime");
-		header("Content-Disposition: inline; filename=$name.{$this->format}");
-		header("Content-Length: {$img->getImageLength()}");
-		header("X-Nep-Width: {$img->getImageProperty('nep:width')}");
-		header("X-Nep-Height: {$img->getImageProperty('nep:height')}");
-		header("X-Nep-Crop: {$img->getImageProperty('nep:crop')}");
+		headers_sent() && throw new Exception("Headers already sent");
+		array_map('header', [
+			"Content-Type: $mime",
+			"Content-Disposition: inline; filename=$name.{$this->format}",
+			"Content-Length: {$img->getImageLength()}",
+			"X-Nep-Width: {$img->getImageProperty('nep:width')}",
+			"X-Nep-Height: {$img->getImageProperty('nep:height')}",
+			"X-Nep-Crop: {$img->getImageProperty('nep:crop')}"
+		]); // getImageLength won't give the number until get_blob is called
 		exit($blob);
 	}
 	public function get_sprites(): array {
