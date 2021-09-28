@@ -10,7 +10,7 @@ class MPBL implements ArrayAccess, Countable {
 	private string $crop = 'default';
 	private array $tdl;
 	private array $cache_src = [];
-	private array $cache_grid = [];
+	private WeakMap $cache_grid;
 
 	function __construct(string $file, ?string $srcdir = null) {
 		$this->datapath = $file;
@@ -25,6 +25,7 @@ class MPBL implements ArrayAccess, Countable {
 		)) || throw new Exception("Bad file [$file]");
 		$this->rs = $this->cs - 2 * $this->pd;
 		$this->set_dir($srcdir);
+		$this->cache_grid = new WeakMap();
 	}
 	function __destruct() {
 		foreach ($this->cache_src as $src)
@@ -38,13 +39,15 @@ class MPBL implements ArrayAccess, Countable {
 			for ($x = 0; $x < $width; $x += $this->cs)
 				yield [$x, $height];
 	}
-	private function gen_grid(string $srcpath): Generator {
-		$src = $this->cache_src[$srcpath] ??= new Imagick($srcpath);
+	private function get_src(string $srcpath): Imagick {
+		return $this->cache_src[$srcpath] ??= new Imagick($srcpath);
+	}
+	private function gen_grid(Imagick $src): Generator {
 		foreach ($this->gen_map($src->getImageWidth(), $src->getImageHeight()) as [$x, $y])
 			yield $this->extract_cell($src, $x, $y);
 	}
-	private function get_grid(string $srcpath): array {
-		return $this->cache_grid[$srcpath] ??= iterator_to_array($this->gen_grid($srcpath));
+	private function get_grid(Imagick $src): array {
+		return $this->cache_grid[$src] ??= iterator_to_array($this->gen_grid($src));
 	}
 	private function build_image(array $td, array $grid): Imagick {
 		$res = new Imagick();
@@ -69,7 +72,7 @@ class MPBL implements ArrayAccess, Countable {
 		return $res;
 	}
 	private function canonical_image(array $td): Imagick {
-		return $this->build_image($td, $this->get_grid($this->srcdir.'/'.$td['atlasName'].'.png'));
+		return $this->build_image($td, $this->get_grid($this->get_src($this->srcdir.'/'.$td['atlasName'].'.png')));
 	}
 	private function gen_sprites(): Generator {
 		foreach ($this->tdl as $td)
