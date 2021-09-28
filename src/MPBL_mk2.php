@@ -34,7 +34,10 @@ class MPBL implements ArrayAccess, Countable {
 	private function extract_cell(Imagick $src, int $x, int $y): Imagick {
 		return $src->getImageRegion($this->cs, $this->cs, $x, $y);
 	}
-	private function gen_map($width, $height): Generator {
+	private function extract_inner(Imagick $src, int $x, int $y): Imagick {
+		return $src->getImageRegion($this->rs, $this->rs, $x + $this->pd, $y + $this->pd);
+	}
+	private function gen_map(int $width, int $height): Generator {
 		while (($height -= $this->cs) >= 0) // bottom to top
 			for ($x = 0; $x < $width; $x += $this->cs)
 				yield [$x, $height];
@@ -146,8 +149,7 @@ class MPBL implements ArrayAccess, Countable {
 		$img = $mutator === null ?: $mutator($img);
 		$blob = $this->get_blob($img);
 		$mime ??= "image/{$this->format}";
-		headers_sent() && throw new Exception("Headers already sent");
-		array_map('header', [
+		headers_sent() || array_map('header', [
 			"Content-Type: $mime",
 			"Content-Disposition: inline; filename=$name.{$this->format}",
 			"Content-Length: {$img->getImageLength()}",
