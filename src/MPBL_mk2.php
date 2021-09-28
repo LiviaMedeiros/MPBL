@@ -33,16 +33,18 @@ class MPBL implements ArrayAccess, Countable {
 	private function extract_cell(Imagick $src, int $x, int $y): Imagick {
 		return $src->getImageRegion($this->cs, $this->cs, $x, $y);
 	}
-	private function generate_grid(string $srcpath, array $res = []): array {
-		if (isset($this->cache_grid[$srcpath]))
-			return $this->cache_grid[$srcpath];
+	private function gen_map($width, $height): Generator {
+		while (($height -= $this->cs) >= 0) // bottom to top
+			for ($x = 0; $x < $width; $x += $this->cs)
+				yield [$x, $height];
+	}
+	private function gen_grid(string $srcpath): Generator {
 		$src = $this->cache_src[$srcpath] ??= new Imagick($srcpath);
-		$src_width = $src->getImageWidth();
-		$y = $src->getImageHeight();
-		while (($y -= $this->cs) >= 0)
-			for ($x = 0; $x < $src_width; $x += $this->cs)
-				$res[] = $this->extract_cell($src, $x, $y);
-		return $this->cache_grid[$srcpath] = $res;
+		foreach ($this->gen_map($src->getImageWidth(), $src->getImageHeight()) as [$x, $y])
+			yield $this->extract_cell($src, $x, $y);
+	}
+	private function get_grid(string $srcpath): array {
+		return $this->cache_grid[$srcpath] ??= iterator_to_array($this->gen_grid($srcpath));
 	}
 	private function build_image(array $td, array $grid): Imagick {
 		$res = new Imagick();
@@ -67,7 +69,7 @@ class MPBL implements ArrayAccess, Countable {
 		return $res;
 	}
 	private function canonical_image(array $td): Imagick {
-		return $this->build_image($td, $this->generate_grid($this->srcdir.'/'.$td['atlasName'].'.png'));
+		return $this->build_image($td, $this->get_grid($this->srcdir.'/'.$td['atlasName'].'.png'));
 	}
 	private function gen_sprites(): Generator {
 		foreach ($this->tdl as $td)
