@@ -85,7 +85,7 @@ class MPBL implements ArrayAccess, Countable {
 		$img->setImageFormat($this->format); // throws ImagickException
 		return $img->getImagesBlob();
 	}
-	private function name2key(string $name): bool|int {
+	private function name2key(string $name): int|false {
 		return array_search($name, array_column($this->tdl, 'name'));
 	}
 	private function data_byname(string $name): array {
