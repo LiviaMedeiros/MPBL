@@ -31,11 +31,27 @@ class MPBL implements ArrayAccess, Countable {
 		foreach ($this->cache_src as $src)
 			$src->clear();
 	}
+
+	private static function pixel2nepixel(int|float $n): string {
+		return round($n/1.46,3).'npx';
+	}
+
 	private function ceilcell(int $n): int {
 		return intval(ceil($n / $this->rs) * $this->rs);
 	}
-	private function pixel2nepixel(int|float $n): string {
-		return round($n/1.46,3).'npx';
+	private function get_sizes($td) {
+		$w = $this->ceilcell($td['width']);
+		$h = $this->ceilcell($td['height']);
+		return [ // key naming comes from cropping method
+			'none' => [$w + 2 * $this->pd, $h + 2 * $this->pd],
+			'default' => [$w, $h],
+			'full' => [$td['width'], $td['height']],
+			'delta' => [$w - $td['width'], $h - $td['height']]
+		];
+	}
+	private function gen_stats(): Generator {
+		foreach ($this->tdl as $td)
+			yield $td['name'] => array_map(fn($s) => implode('x', $s), $this->get_sizes($td));
 	}
 	private function extract_cell(Imagick $src, int $x, int $y): Imagick {
 		return $src->getImageRegion($this->cs, $this->cs, $x, $y);
@@ -60,24 +76,23 @@ class MPBL implements ArrayAccess, Countable {
 	}
 	private function build_image(array $td, array $grid): Imagick {
 		$res = new Imagick();
-		$width = $this->ceilcell($td['width']);
-		$height = $this->ceilcell($td['height']);
-		$res->newImage($width + 2 * $this->pd, $height + 2 * $this->pd, 'transparent');
+		$sz = $this->get_sizes($td);
+		$res->newImage($sz['none'][0], $sz['none'][1], 'transparent');
 		$i = 0;
-		for ($y = $height - $this->rs; $y >= 0; $y -= $this->rs) // bottom to top
-			for ($x = 0; $x < $width; $x += $this->rs) // negative offsets would break colorspace inheritance
+		for ($y = $sz['default'][1] - $this->rs; $y >= 0; $y -= $this->rs) // bottom to top
+			for ($x = 0; $x < $sz['default'][0]; $x += $this->rs) // negative offsets would break colorspace inheritance
 				if ($td['transparentIndex'] != $cell = $td['cellIndexList'][$i++] ?? throw new Exception("Too few indexes [$i]"))
 					$res->compositeImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"), Imagick::COMPOSITE_COPY, $x, $y);
 		match($this->crop) {
 			'none' => true,
-			'full' => $res->cropImage($td['width'], $td['height'], $this->pd, $height - $td['height'] + $this->pd),
-			default => $res->cropImage($width, $height, $this->pd, $this->pd)
+			'full' => $res->cropImage($sz['full'][0], $sz['full'][1], $this->pd, $sz['delta'][1] + $this->pd),
+			default => $res->cropImage($sz['default'][0], $sz['default'][1], $this->pd, $this->pd)
 		} || throw new Exception("Crop failed [{$this->crop}]");
 		$res->setImagePage(0, 0, 0, 0); // safety measure
 
 		array_map([$res, 'setImageProperty'],
-			['nep:width',  'nep:height',    'nep:crop'], array_map('strval',
-			[$td['width'], $td['height'], $this->crop ]));
+			['nep:width', 'nep:height', 'nep:crop'],
+			[...array_map('strval', $sz['full']), $this->crop]);
 		return $res;
 	}
 	private function canonical_image(array $td): Imagick {
@@ -149,6 +164,9 @@ class MPBL implements ArrayAccess, Countable {
 	public function set_crop(string $crop = 'default'): bool {
 		$this->crop = $crop; // should be implemented as enum
 		return true;
+	}
+	public function get_stats(): string {
+		return yaml_emit(iterator_to_array($this->gen_stats()));
 	}
 	public function print_and_exit(string $name, ?string $mime = null, ?callable $mutator = null): void /* 'never' for 8.1+ */ {
 		$img = $this->img_byname($name);
