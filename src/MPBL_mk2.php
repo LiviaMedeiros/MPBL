@@ -39,14 +39,13 @@ class MPBL implements ArrayAccess, Countable {
 	private function ceilcell(int $n): int {
 		return intval(ceil($n / $this->rs) * $this->rs);
 	}
-	private function get_sizes($td) {
-		$w = $this->ceilcell($td['width']);
-		$h = $this->ceilcell($td['height']);
+	private function get_sizes($td): array {
+		$cc = array_map([$this, 'ceilcell'], [$td['width'], $td['height']]);
 		return [ // key naming comes from cropping method
-			'none' => [$w + 2 * $this->pd, $h + 2 * $this->pd],
-			'default' => [$w, $h],
+			'none' => [$cc[0] + 2 * $this->pd, $cc[1] + 2 * $this->pd],
+			'default' => $cc,
 			'full' => [$td['width'], $td['height']],
-			'delta' => [$w - $td['width'], $h - $td['height']]
+			'delta' => [$cc[0] - $td['width'], $cc[1] - $td['height']]
 		];
 	}
 	private function gen_stats(): Generator {
@@ -77,7 +76,7 @@ class MPBL implements ArrayAccess, Countable {
 	private function build_image(array $td, array $grid): Imagick {
 		$res = new Imagick();
 		$sz = $this->get_sizes($td);
-		$res->newImage($sz['none'][0], $sz['none'][1], 'transparent');
+		$res->newImage(...[...$sz['none'], 'transparent']);
 		$i = 0;
 		for ($y = $sz['default'][1] - $this->rs; $y >= 0; $y -= $this->rs) // bottom to top
 			for ($x = 0; $x < $sz['default'][0]; $x += $this->rs) // negative offsets would break colorspace inheritance
@@ -85,8 +84,8 @@ class MPBL implements ArrayAccess, Countable {
 					$res->compositeImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"), Imagick::COMPOSITE_COPY, $x, $y);
 		match($this->crop) {
 			'none' => true,
-			'full' => $res->cropImage($sz['full'][0], $sz['full'][1], $this->pd, $sz['delta'][1] + $this->pd),
-			default => $res->cropImage($sz['default'][0], $sz['default'][1], $this->pd, $this->pd)
+			'full' => $res->cropImage(...[...$sz['full'], $this->pd, $sz['delta'][1] + $this->pd]),
+			default => $res->cropImage(...[...$sz['default'], $this->pd, $this->pd])
 		} || throw new Exception("Crop failed [{$this->crop}]");
 		$res->setImagePage(0, 0, 0, 0); // safety measure
 
@@ -189,7 +188,7 @@ class MPBL implements ArrayAccess, Countable {
 	function __invoke(string $outdir): bool {
 		is_dir($outdir) && is_writable($outdir) || throw new Exception("Bad output directory [$outdir]");
 		foreach ($this->gen_sprites() as $name => $img)
-			$this->write_img($img, $outdir.'/'.$name.'.png');
+			$this->write_img($img, $outdir.'/'.$name.'.'.$this->format);
 		return true;
 	}
 }
