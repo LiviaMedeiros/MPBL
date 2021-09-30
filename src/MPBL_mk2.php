@@ -31,6 +31,12 @@ class MPBL implements ArrayAccess, Countable {
 		foreach ($this->cache_src as $src)
 			$src->clear();
 	}
+	private function ceilcell(int $n): int {
+		return intval(ceil($n / $this->rs) * $this->rs);
+	}
+	private function pixel2nepixel(int|float $n): string {
+		return round($n/1.46,3).'npx';
+	}
 	private function extract_cell(Imagick $src, int $x, int $y): Imagick {
 		return $src->getImageRegion($this->cs, $this->cs, $x, $y);
 	}
@@ -54,8 +60,8 @@ class MPBL implements ArrayAccess, Countable {
 	}
 	private function build_image(array $td, array $grid): Imagick {
 		$res = new Imagick();
-		$width = intval(ceil($td['width'] / $this->rs) * $this->rs);
-		$height = intval(ceil($td['height'] / $this->rs) * $this->rs);
+		$width = $this->ceilcell($td['width']);
+		$height = $this->ceilcell($td['height']);
 		$res->newImage($width + 2 * $this->pd, $height + 2 * $this->pd, 'transparent');
 		$i = 0;
 		for ($y = $height - $this->rs; $y >= 0; $y -= $this->rs) // bottom to top
@@ -64,14 +70,14 @@ class MPBL implements ArrayAccess, Countable {
 					$res->compositeImage($grid[$cell] ?? throw new Exception("Bad cell index [$cell]"), Imagick::COMPOSITE_COPY, $x, $y);
 		match($this->crop) {
 			'none' => true,
-			'full' => $res->cropImage($td['width'], $td['height'], 0, $height - $td['height'] + $this->pd),
+			'full' => $res->cropImage($td['width'], $td['height'], $this->pd, $height - $td['height'] + $this->pd),
 			default => $res->cropImage($width, $height, $this->pd, $this->pd)
 		} || throw new Exception("Crop failed [{$this->crop}]");
 		$res->setImagePage(0, 0, 0, 0); // safety measure
 
-		$res->setImageProperty('nep:width', strval($td['width']));
-		$res->setImageProperty('nep:height', strval($td['height']));
-		$res->setImageProperty('nep:crop', $this->crop);
+		array_map([$res, 'setImageProperty'],
+			['nep:width',  'nep:height',    'nep:crop'], array_map('strval',
+			[$td['width'], $td['height'], $this->crop ]));
 		return $res;
 	}
 	private function canonical_image(array $td): Imagick {
@@ -149,13 +155,13 @@ class MPBL implements ArrayAccess, Countable {
 		$img = $mutator === null ?: $mutator($img);
 		$blob = $this->get_blob($img);
 		$mime ??= "image/{$this->format}";
+		$props = $img->getImageProperties('nep:*');
+		array_walk($props, fn(&$v, $k) => $v = "X-".str_replace(':','-',ucwords($k,':')).": $v");
 		headers_sent() || array_map('header', [
 			"Content-Type: $mime",
 			"Content-Disposition: inline; filename=$name.{$this->format}",
 			"Content-Length: {$img->getImageLength()}",
-			"X-Nep-Width: {$img->getImageProperty('nep:width')}",
-			"X-Nep-Height: {$img->getImageProperty('nep:height')}",
-			"X-Nep-Crop: {$img->getImageProperty('nep:crop')}"
+			...array_values($props)
 		]); // getImageLength won't give the number until get_blob is called
 		exit($blob);
 	}
