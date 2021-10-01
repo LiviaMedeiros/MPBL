@@ -4,17 +4,18 @@ class MPBL implements ArrayAccess, Countable {
 	private int $cs = 64;
 	private int $rs = 58;
 	private int $pd = 3;
-	private string $datapath;
 	private string $srcdir;
-	private string $format = 'png';
-	private string $crop = 'default';
 	private array $tdl;
 	private array $cache_src = [];
 	private WeakMap $cache_grid;
 
-	function __construct(string $file, ?string $srcdir = null) {
-		$this->datapath = $file;
-		is_readable($this->datapath) && ([ // throws TypeError "Cannot assign null to property" if not found
+	function __construct(
+		private string $datapath,
+		?string $srcdir = null,
+		private string $format = 'png',
+		private string $crop = 'default'
+	) {
+		is_readable($datapath) && ([ // throws TypeError "Cannot assign null to property" if not found
 			'cellSize' => $this->cs,
 			'padding' => $this->pd,
 			'textureDataList' => $this->tdl,
@@ -22,10 +23,10 @@ class MPBL implements ArrayAccess, Countable {
 			json: file_get_contents($this->datapath),
 			associative: true,
 			flags: JSON_THROW_ON_ERROR
-		)) || throw new Exception("Bad file [$file]");
+		)) || throw new Exception("Bad file [$datapath]");
 		$this->rs = $this->cs - 2 * $this->pd;
 		$this->set_dir($srcdir);
-		$this->cache_grid = new WeakMap();
+		$this->cache_grid = new WeakMap;
 	}
 	function __destruct() {
 		foreach ($this->cache_src as $src)
@@ -74,7 +75,7 @@ class MPBL implements ArrayAccess, Countable {
 		return $this->cache_grid[$src] ??= iterator_to_array($this->gen_grid($src));
 	}
 	private function build_image(array $td, array $grid): Imagick {
-		$res = new Imagick();
+		$res = new Imagick;
 		$sz = $this->get_sizes($td);
 		$res->newImage(...[...$sz['none'], 'transparent']);
 		$i = 0;
